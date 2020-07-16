@@ -7,6 +7,7 @@ module ActiveRecord
 
     # Override ActiveRecord::Base#touch.
     def touch(*names)
+      names = names.select {|name| !name.is_a?(Hash)}
       if self.class.delay_touching? && !try(:no_touching?)
         DelayTouching.add_record(self, *names)
         true
@@ -75,8 +76,10 @@ module ActiveRecord
 
     # Touch the specified records--non-empty set of instances of the same class.
     def self.touch_records(attr, klass, records)
-      attributes = records.first.send(:timestamp_attributes_for_update_in_model)
-      attributes << attr if attr
+      # timestamp_attributes_for_create_in_model gets frozen before returning in ActiveRecord version 6+
+      frozen_attributes = records.first.send(:timestamp_attributes_for_update_in_model)
+      attributes = frozen_attributes.dup
+      attributes << attr.dup if attr
 
       if attributes.present?
         current_time = records.first.send(:current_time_from_proper_timezone)
@@ -89,8 +92,16 @@ module ActiveRecord
             # Don't bother if destroyed or not-saved
             next unless record.persisted?
             record.instance_eval do
-              write_attribute column, current_time
-              @changed_attributes.except!(*changes.keys)
+              write_attribute column, current_time if @attributes[column].present?
+
+              # @changed_attributes was eliminated in Rails 6.
+              # Clear out data to recompute @mutations_from_database instance variable in ActiveRecord::Dirty#mutations_from_database
+              @mutations_from_database = nil
+              changes.keys.each do |changed_column|
+                unless @attributes.instance_variable_get(:@attributes)[changed_column].instance_variable_get(:@original_attribute).blank?
+                  @attributes.instance_variable_get(:@attributes)[changed_column].remove_instance_variable(:@original_attribute)
+                end
+              end
             end
           end
         end
