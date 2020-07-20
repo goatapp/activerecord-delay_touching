@@ -45,7 +45,7 @@ module ActiveRecord
       def add_record(record, *columns)
         # Inferring nil for touch calls with no column specified is creating duplicate DB calls for nested records
         # Grab the default timestamp columns now as opposed to at write time
-        columns = record.send(:timestamp_attributes_for_update_in_model) if columns.blank?
+        columns = record.send(:timestamp_attributes_for_update_in_model) if columns.empty?
 
         columns.each do |column|
           # Convert column explicitly to string here to keep types consistent
