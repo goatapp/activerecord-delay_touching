@@ -49,7 +49,7 @@ module ActiveRecord
 
         columns.each do |column|
           # Convert column explicitly to string here to keep types consistent
-          column = column.to_s
+          column = column.to_s if column
           @records[column] += [ record ] unless @already_updated_records[column].include?(record)
         end
       end
