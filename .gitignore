@@ -21,6 +21,5 @@ tmp
 *.o
 *.a
 mkmf.log
-.ruby-version
 coverage/
 results.xml
