@@ -125,6 +125,28 @@ describe Activerecord::DelayTouching do
     end
   end
 
+  it 'will not connect to the database if there are no touches' do
+    expect(ActiveRecord::Base).not_to receive(:connection)
+    ActiveRecord::Base.delay_touching do
+      # no touches, so no reason to fetch a connection
+    end
+  end
+
+  it 'will not connect to the database if none of the touches are persisted' do
+    expect(ActiveRecord::Base).not_to receive(:connection)
+    ActiveRecord::Base.delay_touching do
+      Pet.new.touch # not persisted, so won't cause updates
+    end
+  end
+
+  it 'still connects to the database for other queries, even if there are no touches' do
+    expect(ActiveRecord::Base.connection).not_to receive(:update) # no touches
+    expect(ActiveRecord::Base).to receive(:connection).at_least(:once).and_call_original
+    ActiveRecord::Base.delay_touching do
+      expect(Pet.count).to be >= 0 # query should still work
+    end
+  end
+
   context 'touch: true' do
     before do
       person.pets << pet1
