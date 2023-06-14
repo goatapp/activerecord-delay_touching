@@ -4,7 +4,6 @@
 .config
 .yardoc
 .idea
-Gemfile.lock
 InstalledFiles
 _yardoc
 coverage
@@ -21,6 +20,5 @@ tmp
 *.o
 *.a
 mkmf.log
-.ruby-version
 coverage/
 results.xml
