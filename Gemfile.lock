@@ -2,7 +2,7 @@ PATH
   remote: .
   specs:
     activerecord-delay_touching (1.1.2)
-      activerecord (~> 7.1, >= 4.2)
+      activerecord (>= 4.2, < 7.2)
 
 GEM
   remote: https://rubygems.org/
