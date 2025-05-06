@@ -5,6 +5,17 @@ describe Activerecord::DelayTouching do
   let(:pet1) { Pet.create(name: "Bones") }
   let(:pet2) { Pet.create(name: "Ema") }
 
+
+  # Rails 7.2 deprecated ActiveRecord::Base.connection in favor of .lease_connection and .with_connection. By default,
+  # rspec should already have established an active connection around each test which gets reused by each downstream
+  # call to .lease_connection & .with_connection within ActiveRecord. However, Base.lease_connection doesn't make it
+  # clear that the same connection is reused, so we codify this expectation a little more explicitly by using this
+  # `let!`, which is eagerly evaluated for each test and gives us a value to use for assertions.
+  let!(:connection) do
+    expect(ActiveRecord::Base.connection_pool.active_connection?).to be_truthy, "rspec isn't connected to the db"
+    ActiveRecord::Base.connection_pool.active_connection
+  end
+
   it 'has a version number' do
     expect(Activerecord::DelayTouching::VERSION).not_to be nil
   end
@@ -126,24 +137,31 @@ describe Activerecord::DelayTouching do
   end
 
   it 'will not connect to the database if there are no touches' do
-    expect(ActiveRecord::Base).not_to receive(:connection)
-    ActiveRecord::Base.delay_touching do
-      # no touches, so no reason to fetch a connection
+    expect(ActiveRecord::Base).not_to receive(:lease_connection)
+    expect(ActiveRecord::Base).not_to receive(:with_connection)
+    expect_updates [] do
+      ActiveRecord::Base.delay_touching do
+        # no touches, so no reason to fetch a connection
+      end
     end
   end
 
   it 'will not connect to the database if none of the touches are persisted' do
-    expect(ActiveRecord::Base).not_to receive(:connection)
-    ActiveRecord::Base.delay_touching do
-      Pet.new.touch # not persisted, so won't cause updates
+    expect(ActiveRecord::Base).not_to receive(:lease_connection)
+    expect(ActiveRecord::Base).not_to receive(:with_connection)
+    expect_updates [] do
+      ActiveRecord::Base.delay_touching do
+        Pet.new.touch # not persisted, so won't cause updates
+      end
     end
   end
 
   it 'still connects to the database for other queries, even if there are no touches' do
-    expect(ActiveRecord::Base.connection).not_to receive(:update) # no touches
-    expect(ActiveRecord::Base).to receive(:connection).at_least(:once).and_call_original
-    ActiveRecord::Base.delay_touching do
-      expect(Pet.count).to be >= 0 # query should still work
+    expect(ActiveRecord::Base).to receive(:with_connection).at_least(:once).and_call_original
+    expect_updates [] do
+      ActiveRecord::Base.delay_touching do
+        expect(Pet.count).to be >= 0 # query should still work
+      end
     end
   end
 
@@ -199,7 +217,7 @@ describe Activerecord::DelayTouching do
 
     it 'does not infinitely loop' do
       updates = 0
-      allow(ActiveRecord::Base.connection).to receive(:update).and_wrap_original do |m, *args|
+      allow(connection).to receive(:update).and_wrap_original do |m, *args|
         updates = updates + 1
         raise StandardError, 'Too many updates - likely infinite loop detected' if updates > 1
 
@@ -229,7 +247,7 @@ describe Activerecord::DelayTouching do
         Regexp.new(%Q{UPDATE "#{entry}" SET "updated_at" = })
       end
     end.flatten
-    expect(ActiveRecord::Base.connection).to receive(:update).exactly(expected_sql.length).times do |stmt, _, _|
+    expect(connection).to receive(:update).exactly(expected_sql.length).times do |stmt, _, _|
       index = expected_sql.index { |sql| stmt.to_sql =~ sql}
       expect(index).to be, "An unexpected touch occurred: #{stmt.to_sql}"
       expected_sql.delete_at(index)
